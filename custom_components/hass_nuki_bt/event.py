@@ -1,7 +1,12 @@
 """Support for Nuki Opener doorbell events."""
 from __future__ import annotations
 
-from homeassistant.components.event import EventEntity, EventEntityDescription
+from homeassistant.components.event import (
+    DoorbellEventType,
+    EventDeviceClass,
+    EventEntity,
+    EventEntityDescription,
+)
 from homeassistant.core import callback
 
 from pyNukiBT import NukiConst
@@ -21,11 +26,12 @@ async def async_setup_entry(hass, entry, async_add_entities) -> None:
 class NukiOpenerDoorbellEvent(NukiEntity, EventEntity):
     """Represent a physical press of the Opener's doorbell."""
 
-    _attr_event_types = ["doorbell"]
+    _attr_event_types = [DoorbellEventType.RING]
     entity_description = EventEntityDescription(
         key="doorbell",
         name="Doorbell",
         icon="mdi:doorbell",
+        device_class=EventDeviceClass.DOORBELL,
     )
 
     def __init__(self, coordinator: NukiDataUpdateCoordinator) -> None:
@@ -43,4 +49,5 @@ class NukiOpenerDoorbellEvent(NukiEntity, EventEntity):
     @callback
     def _async_handle_doorbell(self) -> None:
         """Record a physical doorbell press."""
-        self.async_set_event("doorbell")
+        self._trigger_event(DoorbellEventType.RING)
+        self.async_write_ha_state()
