@@ -101,6 +101,11 @@ class NukiDataUpdateCoordinator(ActiveBluetoothDataUpdateCoordinator[None]):
         candidate_state = self._doorbell_candidate_state
         self._doorbell_candidate_state = None
         if candidate_state and candidate_state == self._opener_state_signature():
+            if candidate_state[0] == int(NukiConst.State.CONTINUOUS_MODE):
+                _LOGGER.debug(
+                    "Nuki Opener doorbell press suppressed in continuous mode"
+                )
+                return
             _LOGGER.debug("Nuki Opener doorbell press detected")
             for callback in self._doorbell_callbacks:
                 callback()
