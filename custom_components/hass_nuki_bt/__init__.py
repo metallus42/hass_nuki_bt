@@ -32,6 +32,7 @@ from .coordinator import NukiDataUpdateCoordinator
 
 PLATFORMS: list[Platform] = [
     Platform.BINARY_SENSOR,
+    Platform.EVENT,
     Platform.LOCK,
     Platform.SENSOR,
     Platform.BUTTON,

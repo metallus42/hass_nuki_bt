@@ -4,6 +4,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import logging
+from collections.abc import Callable
 from typing import TYPE_CHECKING
 
 import async_timeout
@@ -57,6 +58,8 @@ class NukiDataUpdateCoordinator(ActiveBluetoothDataUpdateCoordinator[None]):
         self.last_nuki_log_entry = {"index" : 0}
         self._security_pin = security_pin
         self._unsubscribe_nuki_callbacks = None
+        self._doorbell_callbacks: list[Callable[[], None]] = []
+        self._doorbell_candidate_state: tuple[int, int] | None = None
 
     @callback
     def _async_start(self) -> None:
@@ -92,6 +95,33 @@ class NukiDataUpdateCoordinator(ActiveBluetoothDataUpdateCoordinator[None]):
         await self.device.update_state()
         await self.async_get_last_action_log_entry()
 
+        # The Opener signals a doorbell press with a BLE state-change beacon,
+        # but its reported state remains LOCKED.  Only emit an event when the
+        # state queried after such a beacon is exactly the same as before it.
+        candidate_state = self._doorbell_candidate_state
+        self._doorbell_candidate_state = None
+        if candidate_state and candidate_state == self._opener_state_signature():
+            _LOGGER.debug("Nuki Opener doorbell press detected")
+            for callback in self._doorbell_callbacks:
+                callback()
+
+    @callback
+    def async_add_doorbell_listener(self, callback: Callable[[], None]) -> Callable[[], None]:
+        """Register a listener for detected Nuki Opener doorbell presses."""
+        self._doorbell_callbacks.append(callback)
+
+        def _unsubscribe() -> None:
+            self._doorbell_callbacks.remove(callback)
+
+        return _unsubscribe
+
+    def _opener_state_signature(self) -> tuple[int, int] | None:
+        """Return the state fields which stay unchanged for a doorbell press."""
+        state = self.device.keyturner_state
+        if not state:
+            return None
+        return (int(state["nuki_state"]), int(state["lock_state"]))
+
     @callback
     def _async_handle_bluetooth_event(
         self,
@@ -100,6 +130,18 @@ class NukiDataUpdateCoordinator(ActiveBluetoothDataUpdateCoordinator[None]):
     ) -> None:
         """Handle a Bluetooth event."""
         self.ble_device = service_info.device
+
+        # pyNukiBT already recognizes this status-change bit and schedules a
+        # state poll. Keep the state immediately before that poll; an Opener
+        # doorbell press is the documented LOCKED -> LOCKED state transition.
+        manufacturer_data = service_info.advertisement.manufacturer_data.get(76)
+        if (
+            self.device.device_type == NukiConst.NukiDeviceType.OPENER
+            and manufacturer_data
+            and manufacturer_data[0] == 0x02
+            and manufacturer_data[-1] & 0x01
+        ):
+            self._doorbell_candidate_state = self._opener_state_signature()
         self.device.parse_advertisement_data(
             service_info.device, service_info.advertisement
         )
@@ -139,4 +181,3 @@ class NukiDataUpdateCoordinator(ActiveBluetoothDataUpdateCoordinator[None]):
                         if log.type in [NukiConst.LogEntryType.LOCK_ACTION, NukiConst.LogEntryType.KEYPAD_ACTION]:
                             self.last_nuki_log_entry = log
                             break
-
