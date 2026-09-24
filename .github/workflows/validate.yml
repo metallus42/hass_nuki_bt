@@ -19,38 +19,12 @@ jobs:
       - name: "Checkout the repository"
         uses: "actions/checkout@v7.0.0"
 
-      - name: "Set up Python"
-        uses: actions/setup-python@v6.3.0
-        with:
-          python-version: "3.14"
-
-      - name: "Install the tested Home Assistant and protocol versions"
+      - name: "Run regression tests in Home Assistant's complete runtime"
         run: |
-          python -m pip install homeassistant==2026.9.3 pyNukiBT==0.0.20 async-timeout==5.0.1
-          python - <<'PY'
-          import json
-          from pathlib import Path
-          import subprocess
-          import sys
-          import homeassistant
-
-          components = Path(homeassistant.__file__).parent / "components"
-          requirements = []
-          pending = ["bluetooth_adapters"]
-          seen = set()
-          while pending:
-              name = pending.pop()
-              if name in seen:
-                  continue
-              seen.add(name)
-              manifest = json.loads((components / name / "manifest.json").read_text())
-              pending.extend(manifest.get("dependencies", []))
-              requirements.extend(manifest.get("requirements", []))
-          subprocess.check_call([sys.executable, "-m", "pip", "install", *requirements])
-          PY
-
-      - name: "Run regression tests"
-        run: python -m unittest discover -s tests -v
+          docker run --rm --entrypoint /bin/sh \
+            -v "$GITHUB_WORKSPACE:/work:ro" -w /work \
+            ghcr.io/home-assistant/home-assistant:2026.9.3 \
+            -c 'python -m pip install --disable-pip-version-check pyNukiBT==0.0.20 async-timeout==5.0.1 && python -m unittest discover -s tests -v'
 
   release-package:
     name: "Release package validation"
