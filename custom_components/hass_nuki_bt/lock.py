@@ -38,6 +38,12 @@ async def async_setup_entry(
         func="async_handle_update_nuki_time",
         supports_response=SupportsResponse.OPTIONAL,
     )
+    platform.async_register_entity_service(
+        "set_bluetooth_pairing",
+        schema={vol.Required("enabled"): cv.boolean},
+        func="async_handle_set_bluetooth_pairing",
+        supports_response=SupportsResponse.OPTIONAL,
+    )
 
 
 class NukiLock(NukiEntity, LockEntity):
