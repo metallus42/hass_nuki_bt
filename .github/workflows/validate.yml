@@ -36,8 +36,16 @@ jobs:
 
           components = Path(homeassistant.__file__).parent / "components"
           requirements = []
-          for name in ("bluetooth", "bluetooth_adapters"):
-              requirements.extend(json.loads((components / name / "manifest.json").read_text()).get("requirements", []))
+          pending = ["bluetooth_adapters"]
+          seen = set()
+          while pending:
+              name = pending.pop()
+              if name in seen:
+                  continue
+              seen.add(name)
+              manifest = json.loads((components / name / "manifest.json").read_text())
+              pending.extend(manifest.get("dependencies", []))
+              requirements.extend(manifest.get("requirements", []))
           subprocess.check_call([sys.executable, "-m", "pip", "install", *requirements])
           PY
 
