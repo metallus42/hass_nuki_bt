@@ -40,7 +40,7 @@ jobs:
             -v "$GITHUB_WORKSPACE:/work:ro" -w /work \
             -v "$RUNNER_TEMP/hass_nuki_bt.zip:/tmp/hass_nuki_bt.zip:ro" \
             ghcr.io/home-assistant/home-assistant:2026.9.3 \
-            -c 'python -m pip install --disable-pip-version-check pyNukiBT==0.0.20 async-timeout==5.0.1 && python scripts/test_release.py /tmp/hass_nuki_bt.zip'
+            -c 'python scripts/install_requirements.py /tmp/hass_nuki_bt.zip && python scripts/test_release.py /tmp/hass_nuki_bt.zip'
 
       - name: "Upload the ZIP file to the release"
         uses: softprops/action-gh-release@v3.0.1
