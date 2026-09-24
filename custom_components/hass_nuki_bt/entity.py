@@ -65,9 +65,11 @@ class NukiEntity(PassiveBluetoothCoordinatorEntity[NukiDataUpdateCoordinator]):
         """Do door action."""
         user = await self.hass.auth.async_get_user(self._context.user_id)
         user_name = user.name if user else None
-        await self.device.lock_action(action, name_suffix=user_name, wait_for_completed = True)
-        await self.coordinator.async_get_last_action_log_entry()
+        completed = await self.device.lock_action(action, name_suffix=user_name, wait_for_completed=True)
+        if not completed:
+            raise HomeAssistantError("Nuki did not confirm that the action completed")
         self.coordinator.async_update_listeners()
+        self.coordinator.async_refresh_after_action()
 
     async def async_handle_update_nuki_time(self, time=None):
         """Update nuki time."""

@@ -17,6 +17,9 @@ from homeassistant.components.bluetooth.active_update_coordinator import (
 )
 from homeassistant.core import HomeAssistant, callback
 from pyNukiBT import NukiDevice, NukiConst
+from pyNukiBT.const import NukiErrorException
+
+from .logs import async_request_log_entries
 
 if TYPE_CHECKING:
     from bleak.backends.device import BLEDevice
@@ -60,6 +63,7 @@ class NukiDataUpdateCoordinator(ActiveBluetoothDataUpdateCoordinator[None]):
         self._unsubscribe_nuki_callbacks = None
         self._doorbell_callbacks: list[Callable[[], None]] = []
         self._doorbell_candidate_state: tuple[int, int] | None = None
+        self._post_action_tasks: set[asyncio.Task] = set()
 
     @callback
     def _async_start(self) -> None:
@@ -70,6 +74,8 @@ class NukiDataUpdateCoordinator(ActiveBluetoothDataUpdateCoordinator[None]):
 
     @callback
     def _async_stop(self) -> None:
+        for task in self._post_action_tasks:
+            task.cancel()
         if self._unsubscribe_nuki_callbacks is not None:
             self._unsubscribe_nuki_callbacks()
         return super()._async_stop()
@@ -163,12 +169,42 @@ class NukiDataUpdateCoordinator(ActiveBluetoothDataUpdateCoordinator[None]):
                 return True
         return False
 
+    @callback
+    def async_refresh_after_action(self) -> None:
+        """Refresh independently of the automation that issued the command.
+
+        Publishing the new state can restart that automation. Its cancellation
+        must not interrupt a log transaction or change an acknowledged result.
+        """
+        task = self.hass.async_create_background_task(
+            self._async_refresh_after_action(), "Nuki state and action log refresh"
+        )
+        self._post_action_tasks.add(task)
+        task.add_done_callback(self._post_action_tasks.discard)
+
+    async def _async_refresh_after_action(self) -> None:
+        """Read the current state before fetching optional log details."""
+        try:
+            await self._async_update()
+        except (BleakError, asyncio.TimeoutError, NukiErrorException) as err:
+            _LOGGER.warning("Nuki action completed, but state refresh failed: %s", err)
+        finally:
+            self.async_update_listeners()
+
     async def async_get_last_action_log_entry(self):
-        """Get the last action log entry."""
+        """Keep optional log failures from breaking state updates or commands."""
+        try:
+            await self._async_get_last_action_log_entry()
+        except (BleakError, asyncio.TimeoutError, NukiErrorException, RuntimeError) as err:
+            _LOGGER.warning("Could not refresh optional Nuki action log: %s", err)
+
+    async def _async_get_last_action_log_entry(self):
+        """Get the last action log entry while preserving the last valid cache."""
         if self._security_pin is not None: #security pin can be 0, so check for None
             # get the latest log entry
             # todo: check if Nuki logging is enabled
-            logs = await self.device.request_log_entries(
+            logs = await async_request_log_entries(
+                self.device,
                 security_pin=self._security_pin, count=1
             )
             if logs:
@@ -177,7 +213,8 @@ class NukiDataUpdateCoordinator(ActiveBluetoothDataUpdateCoordinator[None]):
                     self.last_nuki_log_entry = logs[0]
                 elif logs[0].index > self.last_nuki_log_entry["index"]:
                     # if there are new log entries, get max 10 entries
-                    logs = await self.device.request_log_entries(
+                    logs = await async_request_log_entries(
+                        self.device,
                         security_pin=self._security_pin,
                         count=min(10, logs[0].index - self.last_nuki_log_entry["index"]),
                         start_index=logs[0].index,
