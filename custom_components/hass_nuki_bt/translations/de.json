@@ -1,43 +1,189 @@
 {
-    "title": "Nuki Türöffner",
-    "config": {
-        "flow_title": "{name} ({address})",
-        "step": {
-            "step1": {
-                "title": "Neues Nuki-Gerät",
-                "description": "Bitte auswählen",
-                "data": {
-                    "name": "Gerätename",
-                    "device_address": "Geräteadresse",
-                    "pin": "Sicherheits-PIN (Optional)",
-                    "client_type": "Client-Typ"
-                }
-            },
-            "manual": {
-                "title": "Neues Nuki-Gerät (manuell)",
-                "description": "Informationen manuell eingeben",
-                "data": {
-                    "device_id": "Geräte-ID",
-                    "auth_id": "Authentifizierungs-ID",
-                    "private_key": "Privater Schlüssel",
-                    "public_key": "Öffentlicher Schlüssel",
-                    "device_public_key": "Öffentlicher Schlüssel des Geräts",
-                    "app_id": "App-ID"
-                }
-            },
-            "choose_method": {
-                "description": "Wähle eine Methode zur Konfiguration von {name} ({address}).\nEs wird empfohlen, das Gerät automatisch zu koppeln.\nWähle die manuelle Option nur aus, wenn du weißt, was du tust.\n\nSetze das Nuki vor dem klick auf \"Koppeln\" in den Kopplungsmodus, indem die Taste an deinem Nuki 5 Sekunden lang drückst, bis das Licht dauerhaft leuchtet.",
-                "menu_options": {
-                    "pair": "Gerät automatisch koppeln (empfohlen)",
-                    "manual": "Bereits gepaarte Informationen manuell eingeben"
-                }
-            }
-        },
-        "error": {
-            "auth": "Benutzername/Passwort ist falsch.",
-            "connection": "Verbindung zum Server konnte nicht hergestellt werden.",
-            "unknown": "Unbekannter Fehler ist aufgetreten.",
-            "pairing": "Nuki befindet sich nicht im Kopplungsmodus.\nVersetze das Nuki in den Kopplungsmodus, indem du die Taste 5 Sekunden lang drückst, und versuche es dann erneut."
+  "title": "Nuki BT",
+  "config": {
+    "flow_title": "{name} ({address})",
+    "step": {
+      "step1": {
+        "title": "Neues Nuki-Gerät",
+        "description": "Bluetooth-Adresse und, falls vorhanden, die Sicherheits-PIN eingeben. Bridge ersetzt eine bestehende Bridge-Kopplung; App behält eine bestehende Bridge bei.",
+        "data": {
+          "name": "Gerätename",
+          "device_address": "Bluetooth-Adresse",
+          "pin": "Sicherheits-PIN (optional)",
+          "client_type": "Client-Typ"
         }
+      },
+      "choose_method": {
+        "description": "Wähle die Einrichtung für {name} ({address}). Halte vor dem Koppeln die Nuki-Taste 5 Sekunden gedrückt, bis das Licht dauerhaft leuchtet. Importiere Schlüssel nur, wenn die Daten einer bestehenden Kopplung vorliegen.",
+        "menu_options": {
+          "pair": "Gerät automatisch koppeln",
+          "manual": "Bestehende Kopplung importieren"
+        }
+      },
+      "pair": {
+        "title": "Nuki koppeln",
+        "description": "Prüfe den Kopplungsmodus und versuche es erneut. Gib bei Bedarf die Sicherheits-PIN ein.",
+        "data": {
+          "pin": "Sicherheits-PIN (optional)"
+        }
+      },
+      "manual": {
+        "title": "Bestehende Kopplung importieren",
+        "description": "Gib die Daten einer bestehenden Bluetooth-Kopplung ein.",
+        "data": {
+          "auth_id": "Berechtigungs-ID",
+          "private_key": "Privater Schlüssel",
+          "public_key": "Öffentlicher Schlüssel",
+          "device_public_key": "Öffentlicher Geräteschlüssel",
+          "app_id": "App-ID"
+        }
+      },
+      "reconfigure": {
+        "title": "Sicherheits-PIN ändern",
+        "description": "Gib die aktuell im Nuki eingestellte Sicherheits-PIN ein. Ein leeres Feld entfernt die gespeicherte PIN. Bluetooth-Kopplung und vorhandene Entitäten bleiben erhalten.",
+        "data": {
+          "pin": "Sicherheits-PIN"
+        }
+      }
+    },
+    "error": {
+      "invalid_address": "Gib eine Bluetooth-Adresse wie AA:BB:CC:DD:EE:FF ein.",
+      "invalid_name": "Gib einen Gerätenamen ein.",
+      "invalid_pin": "Gib eine gültige numerische Sicherheits-PIN für dieses Gerät ein.",
+      "pin_required": "Dieses Nuki benötigt die Sicherheits-PIN zum Koppeln.",
+      "invalid_key": "Gib einen hexadezimalen Wert der richtigen Länge ein (8 Zeichen für die Berechtigungs-ID, 64 für Schlüssel).",
+      "invalid_app_id": "Gib eine App-ID zwischen 0 und 4294967295 ein.",
+      "key_mismatch": "Der öffentliche Schlüssel passt nicht zum privaten Schlüssel.",
+      "connection": "Keine Bluetooth-Verbindung zum Nuki möglich. Versuche es erneut, sobald es erreichbar ist.",
+      "pairing": "Nuki ist nicht im Kopplungsmodus. Halte die Taste 5 Sekunden gedrückt und versuche es erneut.",
+      "pairing_failed": "Nuki hat die Kopplung abgelehnt. Prüfe Kopplungsmodus, Sicherheits-PIN und verfügbare Berechtigungen."
+    },
+    "abort": {
+      "already_configured": "Dieses Nuki ist bereits eingerichtet.",
+      "already_in_progress": "Dieses Nuki wird bereits eingerichtet.",
+      "reconfigure_successful": "Die Sicherheits-PIN wurde aktualisiert."
     }
+  },
+  "services": {
+    "update_nuki_time": {
+      "name": "Nuki-Uhrzeit aktualisieren",
+      "description": "Datum und Uhrzeit im Nuki aktualisieren.",
+      "fields": {
+        "time": {
+          "name": "Neues Datum und Uhrzeit",
+          "description": "Optional. Ohne Angabe wird die aktuelle UTC-Zeit verwendet."
+        }
+      }
+    },
+    "set_bluetooth_pairing": {
+      "name": "Bluetooth-Kopplung erlauben oder sperren",
+      "description": "Kopplung eines Openers über seine Taste erlauben oder sperren. Benötigt die gespeicherte Sicherheits-PIN. Nach dem Erlauben die Kopplung am Opener starten.",
+      "fields": {
+        "enabled": {
+          "name": "Bluetooth-Kopplung erlauben",
+          "description": "Kopplung über die Taste des Geräts erlauben."
+        }
+      }
+    }
+  },
+  "entity": {
+    "sensor": {
+      "name": {
+        "name": "Nuki-Gerätename"
+      },
+      "rssi": {
+        "name": "Bluetooth-Signalstärke"
+      },
+      "battery": {
+        "name": "Batterie"
+      },
+      "lock_state": {
+        "name": "Schlosszustand"
+      },
+      "door_sensor_state": {
+        "name": "Türzustand"
+      },
+      "last_lock_action": {
+        "name": "Letzte Schlossaktion"
+      },
+      "last_lock_action_trigger": {
+        "name": "Auslöser der letzten Aktion"
+      },
+      "last_lock_action_completion_status": {
+        "name": "Ergebnis der letzten Aktion"
+      },
+      "last_nuki_command_status": {
+        "name": "Status des letzten Nuki-Befehls"
+      },
+      "nuki_state": {
+        "name": "Nuki-Betriebsmodus",
+        "state": {
+          "UNINITIALIZED": "Nicht initialisiert",
+          "PAIRING_MODE": "Kopplungsmodus",
+          "DOOR_MODE": "Normalbetrieb",
+          "CONTINUOUS_MODE": "Dauermodus",
+          "MAINTENANCE_MODE": "Wartungsmodus"
+        }
+      },
+      "last_action_user": {
+        "name": "Benutzer der letzten Aktion"
+      },
+      "last_log_timestamp": {
+        "name": "Zeitpunkt des letzten Protokolleintrags"
+      },
+      "last_state_timestamp": {
+        "name": "Zeitpunkt des letzten Zustands"
+      }
+    },
+    "binary_sensor": {
+      "battery_critical": {
+        "name": "Batterie schwach"
+      },
+      "battery_charging": {
+        "name": "Batterie lädt"
+      },
+      "accessory_battery_state": {
+        "name": "Keypad-Batterie schwach"
+      },
+      "nightmode_active": {
+        "name": "Nachtmodus"
+      },
+      "was_autounlock": {
+        "name": "Letzte Aktion durch Auto Unlock"
+      }
+    },
+    "button": {
+      "query_state": {
+        "name": "Schlosszustand abfragen"
+      },
+      "enable_bluetooth_pairing": {
+        "name": "Bluetooth-Kopplung erlauben"
+      },
+      "activate_cm": {
+        "name": "Dauermodus aktivieren"
+      },
+      "deactivate_cm": {
+        "name": "Dauermodus deaktivieren"
+      },
+      "unlatch": {
+        "name": "Tür öffnen"
+      },
+      "lockngo": {
+        "name": "Lock 'n' Go"
+      },
+      "lockngounlatch": {
+        "name": "Lock 'n' Go mit Türöffnung"
+      }
+    },
+    "switch": {
+      "continuous_mode": {
+        "name": "Dauermodus"
+      }
+    },
+    "event": {
+      "doorbell": {
+        "name": "Türklingel"
+      }
+    }
+  }
 }

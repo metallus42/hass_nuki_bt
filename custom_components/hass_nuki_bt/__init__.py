@@ -1,22 +1,23 @@
 """Custom integration to integrate hass_nuki_bt with Home Assistant.
 
 For more details about this integration, please refer to
-https://github.com/ludeeus/hass_nuki_bt
+https://github.com/metallus42/hass_nuki_bt
 """
 
 from __future__ import annotations
 import logging
-from asyncio import CancelledError, TimeoutError
+from asyncio import TimeoutError
 from bleak import BleakError
 
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import Platform, CONF_NAME, CONF_PIN
+from homeassistant.const import Platform, CONF_NAME, CONF_PIN, EVENT_HOMEASSISTANT_STOP
 from homeassistant.core import HomeAssistant
 from homeassistant.components import bluetooth
-from homeassistant.exceptions import ConfigEntryNotReady
+from homeassistant.exceptions import ConfigEntryError, ConfigEntryNotReady
 
 
-from pyNukiBT import NukiDevice, NukiConst
+from pyNukiBT import NukiConst
+from pyNukiBT.const import NukiErrorException
 
 from .const import (
     CONF_APP_ID,
@@ -29,6 +30,9 @@ from .const import (
     DOMAIN,
 )
 from .coordinator import NukiDataUpdateCoordinator
+from .migration import async_migrate_entry  # noqa: F401
+from .protocol import SafeNukiDevice
+from .validation import parse_security_pin
 
 PLATFORMS: list[Platform] = [
     Platform.BINARY_SENSOR,
@@ -36,6 +40,7 @@ PLATFORMS: list[Platform] = [
     Platform.LOCK,
     Platform.SENSOR,
     Platform.BUTTON,
+    Platform.SWITCH,
 ]
 
 _LOGGER = logging.getLogger(__name__)
@@ -61,7 +66,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     else:
         client_type = NukiConst.NukiClientType.BRIDGE
 
-    device = NukiDevice(
+    device = SafeNukiDevice(
         address=entry.data[CONF_DEVICE_ADDRESS],
         auth_id=bytes.fromhex(entry.data[CONF_AUTH_ID]),
         nuki_public_key=bytes.fromhex(entry.data[CONF_DEVICE_PUBLIC_KEY]),
@@ -75,38 +80,45 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             hass, addr, connectable=True
         ),
     )
+    coordinator = None
+    setup_complete = False
     try:
         await device.connect()
-    except (BleakError, CancelledError, TimeoutError) as ex:
-        _LOGGER.debug(ex)
-        raise ConfigEntryNotReady(f"Could not connect to {address}")
-
-    hass.data[DOMAIN][entry.entry_id] = coordinator = NukiDataUpdateCoordinator(
-        hass=hass,
-        logger=_LOGGER,
-        ble_device=ble_device,
-        device=device,
-        base_unique_id=entry.unique_id,
-        device_name=entry.data.get(CONF_NAME),
-        connectable=True,
-        security_pin=None if entry.data.get(CONF_PIN) is None else int(entry.data[CONF_PIN]),
-    )
-
-    if not await coordinator.async_wait_ready():
-        raise ConfigEntryNotReady(f"{address} is not advertising state")
-
-    entry.async_on_unload(coordinator.async_start())
-
-    # entry.async_on_unload(entry.add_update_listener(_async_update_listener))
-    # await hass.config_entries.async_forward_entry_setups(
-    #     entry, PLATFORMS_BY_TYPE[sensor_type]
-    # )
-
-    # https://developers.home-assistant.io/docs/integration_fetching_data#coordinated-single-api-poll-for-data-for-all-entities
-    # await coordinator.async_config_entry_first_refresh()
-
-    await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
-    entry.async_on_unload(entry.add_update_listener(async_reload_entry))
+        try:
+            security_pin = parse_security_pin(entry.data.get(CONF_PIN), device.device_type)
+        except ValueError as err:
+            raise ConfigEntryError(
+                "Invalid security PIN for this Nuki device. Reconfigure the integration to correct the PIN."
+            ) from err
+        coordinator = NukiDataUpdateCoordinator(
+            hass=hass,
+            logger=_LOGGER,
+            ble_device=ble_device,
+            device=device,
+            base_unique_id=entry.unique_id,
+            device_name=entry.data.get(CONF_NAME),
+            connectable=True,
+            security_pin=security_pin,
+        )
+        if not await coordinator.async_wait_ready():
+            raise ConfigEntryNotReady(f"{address} is not advertising state")
+        hass.data[DOMAIN][entry.entry_id] = coordinator
+        coordinator.async_start()
+        entry.async_on_unload(coordinator.async_shutdown)
+        entry.async_on_unload(
+            hass.bus.async_listen_once(EVENT_HOMEASSISTANT_STOP, coordinator.async_shutdown)
+        )
+        await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
+        setup_complete = True
+    except (BleakError, TimeoutError, NukiErrorException) as ex:
+        raise ConfigEntryNotReady(f"Could not initialize Nuki at {address}: {ex}") from ex
+    finally:
+        if not setup_complete:
+            if coordinator is not None:
+                await coordinator.async_shutdown()
+            else:
+                await device.disconnect()
+            hass.data[DOMAIN].pop(entry.entry_id, None)
 
     return True
 
@@ -114,11 +126,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Handle removal of an entry."""
     if unloaded := await hass.config_entries.async_unload_platforms(entry, PLATFORMS):
-        hass.data[DOMAIN].pop(entry.entry_id)
+        coordinator = hass.data[DOMAIN].pop(entry.entry_id)
+        await coordinator.async_shutdown()
     return unloaded
 
 
 async def async_reload_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
     """Reload config entry."""
-    await async_unload_entry(hass, entry)
-    await async_setup_entry(hass, entry)
+    await hass.config_entries.async_reload(entry.entry_id)

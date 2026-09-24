@@ -20,7 +20,7 @@ from homeassistant.const import (
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-from pyNukiBT import NukiConst
+from pyNukiBT import NukiConst, NukiLockConst, NukiOpenerConst
 
 from .const import DOMAIN
 from .coordinator import NukiDataUpdateCoordinator
@@ -33,7 +33,7 @@ PARALLEL_UPDATES = 0
 class NukiSensorEntityDescription(SensorEntityDescription):
     """A class that describes nuki sensor entities."""
 
-    info_function: Callable | None = lambda slf: slf.device.keyturner_state[slf.sensor]
+    info_function: Callable | None = lambda slf: slf.device.keyturner_state.get(slf.sensor)
     icon_function: Callable | None = None
 
 SENSOR_TYPES: dict[str, NukiSensorEntityDescription] = {
@@ -41,7 +41,6 @@ SENSOR_TYPES: dict[str, NukiSensorEntityDescription] = {
         key="name",
         name="Nuki Device Name",
         icon="mdi:lock",
-        device_class=SensorDeviceClass.ENUM,
         entity_category=EntityCategory.DIAGNOSTIC,
         info_function=lambda slf: slf.device.config.get(slf.sensor),
     ),
@@ -66,7 +65,7 @@ SENSOR_TYPES: dict[str, NukiSensorEntityDescription] = {
     "lock_state": NukiSensorEntityDescription(
         key="lock_state",
         name="Lock state",
-        icon_function=lambda slf:"mdi:lock" if int(slf.device.keyturner_state["lock_state"]) == 1 else "mdi:lock-open",
+        icon_function=lambda slf: "mdi:lock" if str(slf.device.keyturner_state.get("lock_state")) == "LOCKED" else "mdi:lock-open",
         device_class=SensorDeviceClass.ENUM,
     ),
     "door_sensor_state": NukiSensorEntityDescription(
@@ -92,7 +91,7 @@ SENSOR_TYPES: dict[str, NukiSensorEntityDescription] = {
     "last_lock_action_completion_status": NukiSensorEntityDescription(
         key="last_lock_action_completion_status",
         name="Last action completion status",
-        icon_function=lambda slf: "mdi:lock-check" if slf.device.keyturner_state['last_lock_action_completion_status'] == NukiConst.LockActionCompletionStatus.SUCCESS \
+        icon_function=lambda slf: "mdi:lock-check" if slf.device.keyturner_state.get('last_lock_action_completion_status') == NukiConst.LockActionCompletionStatus.SUCCESS \
             else "mdi:lock-alert",
         device_class=SensorDeviceClass.ENUM,
         entity_category=EntityCategory.DIAGNOSTIC,
@@ -100,11 +99,10 @@ SENSOR_TYPES: dict[str, NukiSensorEntityDescription] = {
     "last_nuki_command_status": NukiSensorEntityDescription(
         key="last_nuki_command_status",
         name="Last Nuki command status",
-        info_function=lambda slf: slf.device.last_action_status,
+        info_function=lambda slf: slf.device.last_action_status.__name__ if isinstance(slf.device.last_action_status, type) else slf.device.last_action_status,
         icon_function=lambda slf: "mdi:lock-check" if slf.device.last_action_status == NukiConst.StatusCode.COMPLETED \
             or slf.device.last_action_status == NukiConst.StatusCode.ACCEPTED \
                 else "mdi:lock-alert",
-        device_class=SensorDeviceClass.ENUM,
         entity_category=EntityCategory.DIAGNOSTIC,
     ),
     "nuki_state": NukiSensorEntityDescription(
@@ -118,7 +116,6 @@ SENSOR_TYPES: dict[str, NukiSensorEntityDescription] = {
         key="last_action_user",
         name="Last action user name",
         icon="mdi:account-lock",
-        device_class=SensorDeviceClass.ENUM,
         entity_category=EntityCategory.DIAGNOSTIC,
         # There is no user name if last action was triggered by button/manual etc.
         info_function=lambda slf: name if (name := slf.coordinator.last_nuki_log_entry.get("name")) else \
@@ -130,8 +127,7 @@ SENSOR_TYPES: dict[str, NukiSensorEntityDescription] = {
         name="Last log timestamp",
         device_class=SensorDeviceClass.TIMESTAMP,
         entity_category=EntityCategory.DIAGNOSTIC,
-        info_function=lambda slf: ts.replace(tzinfo=datetime.timezone(datetime.timedelta(minutes=slf.device.keyturner_state['timezone_offset']))) \
-             if (ts := slf.coordinator.last_nuki_log_entry.get("timestamp")) else None,
+        info_function=lambda slf: device_timestamp(slf.coordinator.last_nuki_log_entry.get("timestamp"), slf.device.keyturner_state),
         entity_registry_enabled_default=False,
     ),
     "last_state_timestamp": NukiSensorEntityDescription(
@@ -139,11 +135,32 @@ SENSOR_TYPES: dict[str, NukiSensorEntityDescription] = {
         name="Last state timestamp",
         device_class=SensorDeviceClass.TIMESTAMP,
         entity_category=EntityCategory.DIAGNOSTIC,
-        info_function=lambda slf: ks['current_time'].replace(tzinfo=datetime.timezone(datetime.timedelta(minutes=ks['timezone_offset']))) \
-            if (ks := slf.device.keyturner_state) else None,
+        info_function=lambda slf: device_timestamp(slf.device.keyturner_state.get("current_time"), slf.device.keyturner_state),
         entity_registry_enabled_default=False,
     ),
 }
+
+
+def device_timestamp(value, state):
+    """Return an aware timestamp, or unknown when optional data is missing."""
+    offset = state.get("timezone_offset")
+    if value is None or offset is None or not -1440 < offset < 1440:
+        return None
+    return value.replace(tzinfo=datetime.timezone(datetime.timedelta(minutes=offset)))
+
+
+def enum_options(device_type, sensor: str) -> list[str] | None:
+    """Declare supported states while retaining existing raw state strings."""
+    device_const = NukiOpenerConst if device_type == NukiConst.NukiDeviceType.OPENER else NukiLockConst
+    enum = {
+        "lock_state": device_const.LockState,
+        "door_sensor_state": NukiConst.DoorsensorState,
+        "last_lock_action": device_const.LockAction,
+        "last_lock_action_trigger": NukiConst.ActionTrigger,
+        "last_lock_action_completion_status": NukiConst.LockActionCompletionStatus,
+        "nuki_state": NukiConst.State,
+    }.get(sensor)
+    return list(map(str, enum.encmapping)) if enum is not None else None
 
 async def async_setup_entry(
     hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback
@@ -162,12 +179,17 @@ class NukiSensor(NukiEntity, SensorEntity):
         super().__init__(coordinator)
         self.sensor = sensor
         self._attr_unique_id = f"{coordinator.base_unique_id}-{sensor}"
+        self._attr_translation_key = sensor
+        self._attr_options = enum_options(self.device.device_type, sensor)
         self.entity_description = SENSOR_TYPES[sensor]
         self._info_function = self.entity_description.info_function
         self._async_update_attrs()
 
     def _async_update_attrs(self) -> None:
         """Update the entity attributes."""
-        self._attr_native_value = self.entity_description.info_function(self)
+        value = self.entity_description.info_function(self)
+        if self.entity_description.device_class == SensorDeviceClass.ENUM:
+            value = str(value) if value is not None and str(value) in self._attr_options else None
+        self._attr_native_value = value
         if self.entity_description.icon_function:
             self._attr_icon = self.entity_description.icon_function(self)

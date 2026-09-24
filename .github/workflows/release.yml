@@ -27,23 +27,23 @@ jobs:
         with:
           ref: refs/tags/${{ env.RELEASE_TAG }}
 
-      - name: "Adjust version number"
-        shell: "bash"
-        run: |
-          yq -i -o json '.version = strenv(RELEASE_TAG)' \
-            "${{ github.workspace }}/custom_components/hass_nuki_bt/manifest.json"
-
       - name: "ZIP the integration directory"
         shell: "bash"
-        run: |
-          cd "${{ github.workspace }}/custom_components/hass_nuki_bt"
-          zip hass_nuki_bt.zip -r ./
+        run: python3 scripts/build_release.py "$RUNNER_TEMP/hass_nuki_bt.zip"
 
       - name: "Validate the installable ZIP"
-        run: python3 scripts/validate_release.py custom_components/hass_nuki_bt/hass_nuki_bt.zip
+        run: python3 scripts/validate_release.py "$RUNNER_TEMP/hass_nuki_bt.zip" --expected-version "$RELEASE_TAG"
+
+      - name: "Test the published archive in Home Assistant's complete runtime"
+        run: |
+          docker run --rm --entrypoint /bin/sh \
+            -v "$GITHUB_WORKSPACE:/work:ro" -w /work \
+            -v "$RUNNER_TEMP/hass_nuki_bt.zip:/tmp/hass_nuki_bt.zip:ro" \
+            ghcr.io/home-assistant/home-assistant:2026.9.3 \
+            -c 'python -m pip install --disable-pip-version-check pyNukiBT==0.0.20 async-timeout==5.0.1 && python scripts/test_release.py /tmp/hass_nuki_bt.zip'
 
       - name: "Upload the ZIP file to the release"
         uses: softprops/action-gh-release@v3.0.1
         with:
           tag_name: ${{ env.RELEASE_TAG }}
-          files: ${{ github.workspace }}/custom_components/hass_nuki_bt/hass_nuki_bt.zip
+          files: ${{ runner.temp }}/hass_nuki_bt.zip

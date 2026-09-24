@@ -15,6 +15,7 @@ from pyNukiBT import NukiDevice
 from .const import MANUFACTURER
 from .coordinator import NukiDataUpdateCoordinator
 from .pairing import async_set_opener_pairing_enabled
+from .protocol import async_lock_action as async_execute_lock_action
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -54,20 +55,15 @@ class NukiEntity(PassiveBluetoothCoordinatorEntity[NukiDataUpdateCoordinator]):
         self._async_update_attrs()
         self.async_write_ha_state()
 
-    async def async_added_to_hass(self) -> None:
-        """Register callbacks."""
-        self.async_on_remove(
-            self.coordinator.async_add_listener(self._handle_coordinator_update)
-        )
-        return await super().async_added_to_hass()
-
     async def async_lock_action(self, action):
         """Do door action."""
         user = await self.hass.auth.async_get_user(self._context.user_id)
         user_name = user.name if user else None
-        completed = await self.device.lock_action(action, name_suffix=user_name, wait_for_completed=True)
-        if not completed:
-            raise HomeAssistantError("Nuki did not confirm that the action completed")
+        try:
+            async with self.coordinator.async_action():
+                await async_execute_lock_action(self.device, action, name_suffix=user_name)
+        except RuntimeError as err:
+            raise HomeAssistantError(str(err)) from err
         self.coordinator.async_update_listeners()
         self.coordinator.async_refresh_after_action()
 
@@ -75,15 +71,17 @@ class NukiEntity(PassiveBluetoothCoordinatorEntity[NukiDataUpdateCoordinator]):
         """Update nuki time."""
         if self.coordinator._security_pin is None: #security pin can be 0, so check for None
             raise ServiceValidationError("Security PIN is required to update nuki time.")
-        result = await self.device.update_nuki_time(self.coordinator._security_pin, time)
+        async with self.coordinator.async_action():
+            result = await self.device.update_nuki_time(self.coordinator._security_pin, time)
         return result.status
 
     async def async_handle_set_bluetooth_pairing(self, enabled: bool):
         """Allow or disallow starting Opener pairing with its physical button."""
         try:
-            result = await async_set_opener_pairing_enabled(
-                self.device, self.coordinator._security_pin, enabled
-            )
+            async with self.coordinator.async_action():
+                result = await async_set_opener_pairing_enabled(
+                    self.device, self.coordinator._security_pin, enabled
+                )
         except ValueError as err:
             raise ServiceValidationError(str(err)) from err
         except RuntimeError as err:

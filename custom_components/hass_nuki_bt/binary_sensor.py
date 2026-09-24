@@ -24,7 +24,7 @@ class NukiBinarySensorEntityDescription(BinarySensorEntityDescription):
     """A class that describes nuki sensor entities."""
 
     info_function: Callable | None = (
-        lambda slf: slf.device.keyturner_state[slf.sensor] != 0
+        lambda slf: None if (value := slf.device.keyturner_state.get(slf.sensor)) is None else value != 0
     )
 
 SENSOR_TYPES_COMMON: list[NukiBinarySensorEntityDescription] = [
@@ -50,12 +50,11 @@ SENSOR_TYPES_LOCK: list[NukiBinarySensorEntityDescription] = SENSOR_TYPES_COMMON
         name="Keypad Battery Critical",
         device_class=BinarySensorDeviceClass.BATTERY,
         entity_category=EntityCategory.DIAGNOSTIC,
-        info_function=lambda slf: slf.device.keyturner_state[slf.sensor] & 0x2,
+        info_function=lambda slf: None if (value := slf.device.keyturner_state.get(slf.sensor)) is None else bool(value & 0x2),
     ),
     NukiBinarySensorEntityDescription(
         key="nightmode_active",
         name="Night Mode",
-        device_class="night_mode",
         icon="hass:weather-night",
         entity_category=EntityCategory.DIAGNOSTIC,
     ),
@@ -88,7 +87,7 @@ class NukiBinarySensor(NukiEntity, BinarySensorEntity):
         """Initialize the Niki sensor."""
         super().__init__(coordinator)
         self.sensor = sensor.key
-        self._attr_name = sensor.name
+        self._attr_translation_key = sensor.key
         self._attr_unique_id = f"{coordinator.base_unique_id}-{sensor.key}"
         self.entity_description = sensor
         self._info_function = sensor.info_function

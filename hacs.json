@@ -2,7 +2,7 @@
     "name": "Nuki BT",
     "filename": "hass_nuki_bt.zip",
     "hide_default_branch": true,
-    "homeassistant": "2022.2.0",
+    "homeassistant": "2026.9.3",
     "render_readme": true,
     "zip_release": true
 }

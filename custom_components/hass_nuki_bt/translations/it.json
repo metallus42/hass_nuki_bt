@@ -1,55 +1,189 @@
 {
-    "title": "Serratura Nuki",
-    "config": {
-        "flow_title": "{name} ({address})",
-        "step": {
-            "step1": {
-                "title": "Nuovo dispositivo Nuki",
-                "description": "Seleziona",
-                "data": {
-                    "name": "Nome dispositivo",
-                    "device_address": "Indirizzo dispositivo",
-                    "pin": "PIN di sicurezza (Optional)",
-                    "client_type": "Tipo di client"
-                }
-            },
-            "manual": {
-                "title": "Nuovo dispositivo Nuki (manuale)",
-                "description": "Inserisci le informazioni manualmente",
-                "data": {
-                    "device_id": "ID Dispositivo",
-                    "auth_id": "ID Auth",
-                    "private_key": "Private Key",
-                    "public_key": "Public Key",
-                    "device_public_key": "Public Key dispositivo",
-                    "app_id": "ID app"
-                }
-            },
-            "choose_method": {
-                "description": "Sceli un metodo per configurare {name} ({address}).\nE' consigliato l'accoppiamento automatico.\nSeleziona manuale solamente se sai quello che stai facendo\n\nPrima di cliccare \"Accoppia\" metti il tuo Nuki in modalità accoppiamento premendo il bottone del Nuki per almeno 5 secondi finchè la luce rimane accesa fissa.",
-                "menu_options": {
-                    "pair": "Accoppia il dispositivo automaticamente (consigliato)",
-                    "manual": "Inserisci le informazioni di accoppaimento manualmente"
-                }
-            }
-        },
-        "error": {
-            "auth": "Username o Password errata.",
-            "connection": "Impossibile connettersi al server.",
-            "unknown": "Errore sconosciuto.",
-            "pairing": "Nuki non è in modalità accoppiamento.\nMetti il Nuki in modalità accoppiamento premendo il bottone per 5 secondi, poi prova nuovamente"
+  "title": "Nuki BT",
+  "config": {
+    "flow_title": "{name} ({address})",
+    "step": {
+      "step1": {
+        "title": "Nuovo dispositivo Nuki",
+        "description": "Inserisci indirizzo Bluetooth e PIN di sicurezza, se disponibile. Bridge sostituisce un bridge già associato; App mantiene il bridge esistente.",
+        "data": {
+          "name": "Nome dispositivo",
+          "device_address": "Indirizzo Bluetooth",
+          "pin": "PIN di sicurezza (facoltativo)",
+          "client_type": "Tipo di client"
         }
+      },
+      "choose_method": {
+        "description": "Scegli come configurare {name} ({address}). Prima di associare, tieni premuto il pulsante Nuki per 5 secondi finché la luce resta accesa. Importa le chiavi solo se possiedi i dati di una precedente associazione.",
+        "menu_options": {
+          "pair": "Associa automaticamente",
+          "manual": "Importa associazione esistente"
+        }
+      },
+      "pair": {
+        "title": "Associa Nuki",
+        "description": "Verifica la modalità di associazione e riprova. Inserisci il PIN di sicurezza se necessario.",
+        "data": {
+          "pin": "PIN di sicurezza (facoltativo)"
+        }
+      },
+      "manual": {
+        "title": "Importa associazione esistente",
+        "description": "Inserisci i dati di una precedente associazione Bluetooth.",
+        "data": {
+          "auth_id": "ID autorizzazione",
+          "private_key": "Chiave privata",
+          "public_key": "Chiave pubblica",
+          "device_public_key": "Chiave pubblica del dispositivo",
+          "app_id": "ID app"
+        }
+      },
+      "reconfigure": {
+        "title": "Modifica PIN di sicurezza",
+        "description": "Inserisci il PIN attualmente impostato sul Nuki. Lascia vuoto per rimuovere il PIN memorizzato. L’associazione Bluetooth e le entità esistenti vengono mantenute.",
+        "data": {
+          "pin": "PIN di sicurezza"
+        }
+      }
     },
-    "services": {
-        "update_nuki_time": {
-          "name": "Aggiorna orologio del Nuki",
-          "description": "Aggiorna la data e l'ora interna del Nuki.",
-          "fields": {
-            "time": {
-              "name": "Nuova data e ora",
-              "description": "Opzionale. Data e ora da inviare al Nuki. Se non viene indcata l'ora verrà usata la corrente ora UTC."
-              }
-            }
-        }
+    "error": {
+      "invalid_address": "Inserisci un indirizzo Bluetooth come AA:BB:CC:DD:EE:FF.",
+      "invalid_name": "Inserisci un nome per il dispositivo.",
+      "invalid_pin": "Inserisci un PIN di sicurezza numerico valido per questo dispositivo.",
+      "pin_required": "Questo Nuki richiede il PIN per l’associazione.",
+      "invalid_key": "Inserisci un valore esadecimale della lunghezza richiesta (8 caratteri per ID autorizzazione, 64 per le chiavi).",
+      "invalid_app_id": "Inserisci un ID app tra 0 e 4294967295.",
+      "key_mismatch": "La chiave pubblica non corrisponde alla chiave privata.",
+      "connection": "Impossibile connettersi al Nuki tramite Bluetooth. Riprova quando è raggiungibile.",
+      "pairing": "Nuki non è in modalità associazione. Tieni premuto il pulsante per 5 secondi e riprova.",
+      "pairing_failed": "Nuki ha rifiutato l’associazione. Verifica modalità di associazione, PIN e autorizzazioni disponibili."
+    },
+    "abort": {
+      "already_configured": "Questo Nuki è già configurato.",
+      "already_in_progress": "La configurazione di questo Nuki è già in corso.",
+      "reconfigure_successful": "Il PIN di sicurezza è stato aggiornato."
     }
+  },
+  "services": {
+    "update_nuki_time": {
+      "name": "Aggiorna orologio Nuki",
+      "description": "Aggiorna data e ora interne del Nuki.",
+      "fields": {
+        "time": {
+          "name": "Nuova data e ora",
+          "description": "Facoltativo. Se omesso, viene usata l’ora UTC corrente."
+        }
+      }
+    },
+    "set_bluetooth_pairing": {
+      "name": "Consenti o blocca associazione Bluetooth",
+      "description": "Consenti o blocca l’associazione di un Opener con il suo pulsante. Richiede il PIN memorizzato. Dopo averla consentita, avvia l’associazione sull’Opener.",
+      "fields": {
+        "enabled": {
+          "name": "Consenti associazione Bluetooth",
+          "description": "Consenti l’associazione tramite il pulsante del dispositivo."
+        }
+      }
+    }
+  },
+  "entity": {
+    "sensor": {
+      "name": {
+        "name": "Nome dispositivo Nuki"
+      },
+      "rssi": {
+        "name": "Segnale Bluetooth"
+      },
+      "battery": {
+        "name": "Batteria"
+      },
+      "lock_state": {
+        "name": "Stato serratura"
+      },
+      "door_sensor_state": {
+        "name": "Stato porta"
+      },
+      "last_lock_action": {
+        "name": "Ultima azione della serratura"
+      },
+      "last_lock_action_trigger": {
+        "name": "Origine dell’ultima azione"
+      },
+      "last_lock_action_completion_status": {
+        "name": "Esito dell’ultima azione"
+      },
+      "last_nuki_command_status": {
+        "name": "Stato ultimo comando Nuki"
+      },
+      "nuki_state": {
+        "name": "Modalità Nuki",
+        "state": {
+          "UNINITIALIZED": "Non inizializzato",
+          "PAIRING_MODE": "Modalità associazione",
+          "DOOR_MODE": "Modalità porta",
+          "CONTINUOUS_MODE": "Modalità continua",
+          "MAINTENANCE_MODE": "Modalità manutenzione"
+        }
+      },
+      "last_action_user": {
+        "name": "Utente dell’ultima azione"
+      },
+      "last_log_timestamp": {
+        "name": "Data ultima voce di registro"
+      },
+      "last_state_timestamp": {
+        "name": "Data ultimo stato"
+      }
+    },
+    "binary_sensor": {
+      "battery_critical": {
+        "name": "Batteria scarica"
+      },
+      "battery_charging": {
+        "name": "Batteria in carica"
+      },
+      "accessory_battery_state": {
+        "name": "Batteria tastierino scarica"
+      },
+      "nightmode_active": {
+        "name": "Modalità notturna"
+      },
+      "was_autounlock": {
+        "name": "Ultima azione con Auto Unlock"
+      }
+    },
+    "button": {
+      "query_state": {
+        "name": "Leggi stato serratura"
+      },
+      "enable_bluetooth_pairing": {
+        "name": "Consenti associazione Bluetooth"
+      },
+      "activate_cm": {
+        "name": "Attiva modalità continua"
+      },
+      "deactivate_cm": {
+        "name": "Disattiva modalità continua"
+      },
+      "unlatch": {
+        "name": "Apri porta"
+      },
+      "lockngo": {
+        "name": "Lock 'n' Go"
+      },
+      "lockngounlatch": {
+        "name": "Lock 'n' Go con apertura"
+      }
+    },
+    "switch": {
+      "continuous_mode": {
+        "name": "Modalità continua"
+      }
+    },
+    "event": {
+      "doorbell": {
+        "name": "Campanello"
+      }
+    }
+  }
 }

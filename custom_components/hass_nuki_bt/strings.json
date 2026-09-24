@@ -1,55 +1,189 @@
 {
-    "title": "Nuki Lock",
-    "config": {
-        "flow_title": "{name} ({address})",
-        "step": {
-            "step1": {
-                "title": "New Nuki device",
-                "description": "Please select",
-                "data": {
-                    "name": "Device Name",
-                    "device_address": "Device Address",
-                    "pin": "Security PIN (Optional)",
-                    "client_type": "Client Type"
-                }
-            },
-            "manual": {
-                "title": "New Nuki device (manual)",
-                "description": "Enter information manually",
-                "data": {
-                    "device_id": "Device ID",
-                    "auth_id": "Auth ID",
-                    "private_key": "Private Key",
-                    "public_key": "Public Key",
-                    "device_public_key": "device Public Key",
-                    "app_id": "app ID"
-                }
-            },
-            "choose_method": {
-                "description": "Choose a method to configure {name} ({address}).\nIt is recomended to pair the device automatically.\nSelect the manual option only if you know what you are doing\n\nBefore clicking on \"Pair\" put your Nuki in pairing mode by pressing the button on your Nuki for 5 seconds until the light is parmanently glowing.",
-                "menu_options": {
-                    "pair": "Pair device automatically (recomended)",
-                    "manual": "Enter already-paird information manually"
-                }
-            }
-        },
-        "error": {
-            "auth": "Username/Password is wrong.",
-            "connection": "Unable to connect to the server.",
-            "unknown": "Unknown error occurred.",
-            "pairing": "Nuki is not in pairing mode.\nPut Nuki in pairing mode by pressing the button 5 seconds, Then try again"
+  "title": "Nuki BT",
+  "config": {
+    "flow_title": "{name} ({address})",
+    "step": {
+      "step1": {
+        "title": "New Nuki device",
+        "description": "Enter the Bluetooth address and, if available, the device security PIN. Bridge replaces an existing bridge pairing; App keeps an existing bridge.",
+        "data": {
+          "name": "Device name",
+          "device_address": "Bluetooth address",
+          "pin": "Security PIN (optional)",
+          "client_type": "Client type"
         }
+      },
+      "choose_method": {
+        "description": "Choose how to configure {name} ({address}). Before pairing, hold the Nuki button for 5 seconds until its light stays on. Import existing keys only if you already have the pairing credentials.",
+        "menu_options": {
+          "pair": "Pair device automatically",
+          "manual": "Import existing pairing"
+        }
+      },
+      "pair": {
+        "title": "Pair Nuki",
+        "description": "Check the device is in pairing mode and try again. If needed, enter its security PIN.",
+        "data": {
+          "pin": "Security PIN (optional)"
+        }
+      },
+      "manual": {
+        "title": "Import existing pairing",
+        "description": "Enter the credentials of an existing Bluetooth pairing.",
+        "data": {
+          "auth_id": "Authorization ID",
+          "private_key": "Private key",
+          "public_key": "Public key",
+          "device_public_key": "Device public key",
+          "app_id": "App ID"
+        }
+      },
+      "reconfigure": {
+        "title": "Change security PIN",
+        "description": "Enter the security PIN currently set on the Nuki. Leave empty to remove the stored PIN. This preserves the Bluetooth pairing and existing entities.",
+        "data": {
+          "pin": "Security PIN"
+        }
+      }
     },
-    "services": {
-        "update_nuki_time": {
-          "name": "Update Nuki time",
-          "description": "Update Nuki internal date and time.",
-          "fields": {
-            "time": {
-              "name": "New datetime",
-              "description": "Optional. The datetime to send to Nuki. If no time is given, current UTC time is used."
-              }
-            }
-        }
+    "error": {
+      "invalid_address": "Enter a Bluetooth address such as AA:BB:CC:DD:EE:FF.",
+      "invalid_name": "Enter a device name.",
+      "invalid_pin": "Enter a valid numeric security PIN for this device.",
+      "pin_required": "This Nuki requires its security PIN for pairing.",
+      "invalid_key": "Enter a hexadecimal key of the required length (8 characters for the authorization ID, 64 for keys).",
+      "invalid_app_id": "Enter an app ID between 0 and 4294967295.",
+      "key_mismatch": "The public key does not match the private key.",
+      "connection": "Could not connect to the Nuki over Bluetooth. Try again when it is reachable.",
+      "pairing": "Nuki is not in pairing mode. Hold its button for 5 seconds, then try again.",
+      "pairing_failed": "Nuki rejected pairing. Check pairing mode, the security PIN and available authorizations, then try again."
+    },
+    "abort": {
+      "already_configured": "This Nuki is already configured.",
+      "already_in_progress": "Configuration of this Nuki is already in progress.",
+      "reconfigure_successful": "The security PIN has been updated."
     }
+  },
+  "services": {
+    "update_nuki_time": {
+      "name": "Update Nuki time",
+      "description": "Update the Nuki internal date and time.",
+      "fields": {
+        "time": {
+          "name": "New date and time",
+          "description": "Optional. If omitted, use the current UTC time."
+        }
+      }
+    },
+    "set_bluetooth_pairing": {
+      "name": "Set Bluetooth pairing permission",
+      "description": "Allow or disallow pairing an Opener using its physical button. Requires the stored security PIN. After enabling, start pairing on the Opener itself.",
+      "fields": {
+        "enabled": {
+          "name": "Allow Bluetooth pairing",
+          "description": "Allow pairing using the physical button."
+        }
+      }
+    }
+  },
+  "entity": {
+    "sensor": {
+      "name": {
+        "name": "Nuki device name"
+      },
+      "rssi": {
+        "name": "Bluetooth signal strength"
+      },
+      "battery": {
+        "name": "Battery"
+      },
+      "lock_state": {
+        "name": "Lock state"
+      },
+      "door_sensor_state": {
+        "name": "Door state"
+      },
+      "last_lock_action": {
+        "name": "Last lock action"
+      },
+      "last_lock_action_trigger": {
+        "name": "Last action trigger"
+      },
+      "last_lock_action_completion_status": {
+        "name": "Last action completion status"
+      },
+      "last_nuki_command_status": {
+        "name": "Last Nuki command status"
+      },
+      "nuki_state": {
+        "name": "Nuki state",
+        "state": {
+          "UNINITIALIZED": "Not initialized",
+          "PAIRING_MODE": "Pairing mode",
+          "DOOR_MODE": "Door mode",
+          "CONTINUOUS_MODE": "Continuous Mode",
+          "MAINTENANCE_MODE": "Maintenance mode"
+        }
+      },
+      "last_action_user": {
+        "name": "Last action user name"
+      },
+      "last_log_timestamp": {
+        "name": "Last log timestamp"
+      },
+      "last_state_timestamp": {
+        "name": "Last state timestamp"
+      }
+    },
+    "binary_sensor": {
+      "battery_critical": {
+        "name": "Battery critical"
+      },
+      "battery_charging": {
+        "name": "Battery charging"
+      },
+      "accessory_battery_state": {
+        "name": "Keypad battery critical"
+      },
+      "nightmode_active": {
+        "name": "Night mode"
+      },
+      "was_autounlock": {
+        "name": "Last action was auto unlock"
+      }
+    },
+    "button": {
+      "query_state": {
+        "name": "Query lock state"
+      },
+      "enable_bluetooth_pairing": {
+        "name": "Enable Bluetooth pairing"
+      },
+      "activate_cm": {
+        "name": "Activate Continuous Mode"
+      },
+      "deactivate_cm": {
+        "name": "Deactivate Continuous Mode"
+      },
+      "unlatch": {
+        "name": "Unlatch"
+      },
+      "lockngo": {
+        "name": "Lock 'n' Go"
+      },
+      "lockngounlatch": {
+        "name": "Lock 'n' Go with unlatch"
+      }
+    },
+    "switch": {
+      "continuous_mode": {
+        "name": "Continuous Mode"
+      }
+    },
+    "event": {
+      "doorbell": {
+        "name": "Doorbell"
+      }
+    }
+  }
 }

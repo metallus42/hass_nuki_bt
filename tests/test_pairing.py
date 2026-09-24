@@ -1,24 +1,19 @@
 """Protocol regression tests, run with the pinned pyNukiBT dependency installed."""
 
 import asyncio
-import importlib.util
-from pathlib import Path
 import struct
 import unittest
 
 from pyNukiBT import NukiConst, NukiOpenerConst
 
-spec = importlib.util.spec_from_file_location(
-    "pairing", Path(__file__).parents[1] / "custom_components/hass_nuki_bt/pairing.py"
-)
-pairing = importlib.util.module_from_spec(spec)
-spec.loader.exec_module(pairing)
+from custom_components.hass_nuki_bt import pairing
 
 
 class FakeOpener:
     """Simulate challenge-protected config operations and real wire encoding."""
 
     device_type = NukiConst.NukiDeviceType.OPENER
+    _const = NukiOpenerConst
 
     def __init__(self):
         """Set up a device with distinct values for its writable settings."""
@@ -38,6 +33,9 @@ class FakeOpener:
         self.persist = True
         self.change_other_setting = False
         self.status = NukiOpenerConst.StatusCode.COMPLETED
+        self.config_reads = 0
+        self.config_read_errors = {}
+        self.used_nonces = set()
 
     async def _send_encrypted_command(self, command, payload, **kwargs):
         assert self._operation_lock.locked()
@@ -48,7 +46,13 @@ class FakeOpener:
             self.nonces.append(nonce)
             return {"nonce": nonce}
         assert payload["nonce"] == self.nonces[-1]
+        assert payload["nonce"] not in self.used_nonces
+        self.used_nonces.add(payload["nonce"])
         if command == cmds.REQUEST_CONFIG:
+            assert kwargs["response_retry"] == 1
+            self.config_reads += 1
+            if error := self.config_read_errors.get(self.config_reads):
+                raise error
             return self.current.copy()
         if command == cmds.SET_CONFIG:
             assert kwargs["response_retry"] == 1
@@ -144,6 +148,34 @@ class PairingTests(unittest.IsolatedAsyncioTestCase):
         with self.assertRaisesRegex(RuntimeError, "did not confirm"):
             await pairing.async_set_opener_pairing_enabled(device, 0, True)
         self.assertTrue(device._poll_needed_config)
+
+    async def test_lost_readback_uses_fresh_nonce_without_repeating_write(self):
+        """A confirmed config write survives one lost verification response."""
+        device = FakeOpener()
+        device.config_read_errors = {2: TimeoutError()}
+        self.assertTrue(await pairing.async_set_opener_pairing_enabled(device, 0, True))
+        self.assertEqual(device.commands.count(NukiOpenerConst.NukiCommand.SET_CONFIG), 1)
+        self.assertEqual(len(device.nonces), 4)
+        self.assertEqual(len(device.used_nonces), 4)
+
+    async def test_failed_readback_reports_confirmation_separately(self):
+        """Do not claim an acknowledged setting failed or resend its write."""
+        device = FakeOpener()
+        device.config_read_errors = {2: TimeoutError(), 3: TimeoutError()}
+        with self.assertRaisesRegex(RuntimeError, "confirmed.*verification failed"):
+            await pairing.async_set_opener_pairing_enabled(device, 0, True)
+        self.assertEqual(device.current["pairing_enabled"], 1)
+        self.assertEqual(device.commands.count(NukiOpenerConst.NukiCommand.SET_CONFIG), 1)
+        self.assertTrue(device._poll_needed_config)
+
+    async def test_cancel_during_verification_is_not_retried(self):
+        """Cancellation after the setting is acknowledged must still propagate."""
+        device = FakeOpener()
+        device.config_read_errors = {2: asyncio.CancelledError()}
+        with self.assertRaises(asyncio.CancelledError):
+            await pairing.async_set_opener_pairing_enabled(device, 0, True)
+        self.assertEqual(device.config_reads, 2)
+        self.assertFalse(device._operation_lock.locked())
 
 
 if __name__ == "__main__":

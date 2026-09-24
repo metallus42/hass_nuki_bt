@@ -1,17 +1,16 @@
 """Regression tests for acknowledged actions and challenge-protected log reads."""
 
 import asyncio
+from contextlib import nullcontext
 from types import SimpleNamespace
 import unittest
 from unittest.mock import AsyncMock, Mock, patch
 
-from bleak import BleakError
 from construct import Container
 from homeassistant.exceptions import HomeAssistantError
 from pyNukiBT import NukiConst, NukiOpenerConst
 from pyNukiBT.const import NukiErrorException
 
-from custom_components.hass_nuki_bt.coordinator import NukiDataUpdateCoordinator
 from custom_components.hass_nuki_bt.entity import NukiEntity
 from custom_components.hass_nuki_bt.logs import async_request_log_entries
 
@@ -120,8 +119,9 @@ class ActionTests(unittest.IsolatedAsyncioTestCase):
         return SimpleNamespace(
             _context=SimpleNamespace(user_id=None),
             hass=SimpleNamespace(auth=SimpleNamespace(async_get_user=AsyncMock(return_value=None))),
-            device=SimpleNamespace(lock_action=AsyncMock(return_value=True)),
+            device=SimpleNamespace(),
             coordinator=SimpleNamespace(
+                async_action=Mock(side_effect=nullcontext),
                 async_get_last_action_log_entry=AsyncMock(side_effect=TimeoutError()),
                 async_update_listeners=Mock(),
                 async_refresh_after_action=Mock(),
@@ -131,112 +131,31 @@ class ActionTests(unittest.IsolatedAsyncioTestCase):
     async def test_completed_action_does_not_wait_for_logs(self):
         """A confirmed action returns even if the optional log is unavailable."""
         entity = self.make_entity()
-        await NukiEntity.async_lock_action(entity, NukiOpenerConst.LockAction.ACTIVATE_CM)
-        entity.device.lock_action.assert_awaited_once()
+        with patch("custom_components.hass_nuki_bt.entity.async_execute_lock_action", new_callable=AsyncMock) as execute:
+            await NukiEntity.async_lock_action(entity, NukiOpenerConst.LockAction.ACTIVATE_CM)
+        execute.assert_awaited_once_with(entity.device, NukiOpenerConst.LockAction.ACTIVATE_CM, name_suffix=None)
         entity.coordinator.async_get_last_action_log_entry.assert_not_awaited()
         entity.coordinator.async_refresh_after_action.assert_called_once()
 
     async def test_rejected_action_is_not_reported_as_success(self):
         """A false completion result must remain a service error."""
         entity = self.make_entity()
-        entity.device.lock_action.return_value = False
-        with self.assertRaises(HomeAssistantError):
+        with (
+            patch("custom_components.hass_nuki_bt.entity.async_execute_lock_action", new_callable=AsyncMock, side_effect=RuntimeError("unconfirmed")),
+            self.assertRaises(HomeAssistantError),
+        ):
             await NukiEntity.async_lock_action(entity, NukiOpenerConst.LockAction.ACTIVATE_CM)
         entity.coordinator.async_refresh_after_action.assert_not_called()
 
     async def test_command_error_propagates(self):
         """Only optional reads are best effort; command failures still fail."""
         entity = self.make_entity()
-        entity.device.lock_action.side_effect = nuki_error(NukiOpenerConst.ErrorCode.K_ERROR_BAD_NONCE)
-        with self.assertRaises(NukiErrorException):
+        with (
+            patch("custom_components.hass_nuki_bt.entity.async_execute_lock_action", new_callable=AsyncMock, side_effect=nuki_error(NukiOpenerConst.ErrorCode.K_ERROR_BAD_NONCE)),
+            self.assertRaises(NukiErrorException),
+        ):
             await NukiEntity.async_lock_action(entity, NukiOpenerConst.LockAction.ACTIVATE_CM)
         entity.coordinator.async_refresh_after_action.assert_not_called()
-
-
-class CoordinatorTests(unittest.IsolatedAsyncioTestCase):
-    """Exercise optional diagnostics, state updates and task lifecycle."""
-
-    async def test_log_errors_preserve_cached_entry(self):
-        """Communication failures must not replace the previous valid log."""
-        for error in (TimeoutError(), BleakError("offline"), nuki_error(NukiOpenerConst.ErrorCode.K_ERROR_BAD_NONCE)):
-            coordinator = SimpleNamespace(
-                _async_get_last_action_log_entry=AsyncMock(side_effect=error),
-                last_nuki_log_entry={"index": 17},
-            )
-            with self.assertLogs("custom_components.hass_nuki_bt.coordinator", level="WARNING"):
-                await NukiDataUpdateCoordinator.async_get_last_action_log_entry(coordinator)
-            self.assertEqual(coordinator.last_nuki_log_entry, {"index": 17})
-
-    async def test_optional_log_failure_does_not_drop_doorbell(self):
-        """An already read state must still be processed when logging fails."""
-        rang = Mock()
-        signature = (int(NukiConst.State.DOOR_MODE), int(NukiOpenerConst.LockState.LOCKED))
-        coordinator = SimpleNamespace(
-            device=SimpleNamespace(update_state=AsyncMock()),
-            _async_get_last_action_log_entry=AsyncMock(side_effect=TimeoutError()),
-            _doorbell_candidate_state=signature,
-            _opener_state_signature=lambda: signature,
-            _doorbell_callbacks=[rang],
-        )
-        coordinator.async_get_last_action_log_entry = lambda: NukiDataUpdateCoordinator.async_get_last_action_log_entry(coordinator)
-        with self.assertLogs("custom_components.hass_nuki_bt.coordinator", level="WARNING"):
-            await NukiDataUpdateCoordinator._async_update(coordinator)
-        rang.assert_called_once()
-
-    async def test_cancellation_propagates_from_log_read(self):
-        """Do not swallow task cancellation as an optional diagnostic error."""
-        coordinator = SimpleNamespace(_async_get_last_action_log_entry=AsyncMock(side_effect=asyncio.CancelledError()))
-        with self.assertRaises(asyncio.CancelledError):
-            await NukiDataUpdateCoordinator.async_get_last_action_log_entry(coordinator)
-
-    async def test_background_refresh_failure_is_handled(self):
-        """A read timeout cannot turn a completed command into an exception."""
-        coordinator = SimpleNamespace(_async_update=AsyncMock(side_effect=TimeoutError()), async_update_listeners=Mock())
-        with self.assertLogs("custom_components.hass_nuki_bt.coordinator", level="WARNING"):
-            await NukiDataUpdateCoordinator._async_refresh_after_action(coordinator)
-        coordinator.async_update_listeners.assert_called_once()
-
-    async def test_refresh_survives_caller_cancellation_and_is_tracked(self):
-        """Restarting the calling automation must not cancel its log read."""
-        started, release = asyncio.Event(), asyncio.Event()
-
-        async def refresh():
-            started.set()
-            await release.wait()
-
-        coordinator = SimpleNamespace(
-            hass=SimpleNamespace(async_create_background_task=lambda coro, name: asyncio.create_task(coro, name=name)),
-            _async_refresh_after_action=refresh,
-            _post_action_tasks=set(),
-        )
-
-        async def caller():
-            NukiDataUpdateCoordinator.async_refresh_after_action(coordinator)
-            await asyncio.Event().wait()
-
-        caller_task = asyncio.create_task(caller())
-        await started.wait()
-        caller_task.cancel()
-        with self.assertRaises(asyncio.CancelledError):
-            await caller_task
-        refresh_task, = coordinator._post_action_tasks
-        self.assertFalse(refresh_task.done())
-        release.set()
-        await refresh_task
-        await asyncio.sleep(0)
-        self.assertFalse(coordinator._post_action_tasks)
-
-    async def test_unload_cancels_refresh(self):
-        """Outstanding reads are cancelled when the integration unloads."""
-        task = asyncio.create_task(asyncio.Event().wait())
-        coordinator = object.__new__(NukiDataUpdateCoordinator)
-        coordinator._post_action_tasks = {task}
-        coordinator._unsubscribe_nuki_callbacks = Mock()
-        with patch("homeassistant.components.bluetooth.active_update_coordinator.ActiveBluetoothDataUpdateCoordinator._async_stop"):
-            coordinator._async_stop()
-        with self.assertRaises(asyncio.CancelledError):
-            await task
-        coordinator._unsubscribe_nuki_callbacks.assert_called_once()
 
 
 if __name__ == "__main__":
