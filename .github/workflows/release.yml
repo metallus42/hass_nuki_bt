@@ -25,6 +25,9 @@ jobs:
           cd "${{ github.workspace }}/custom_components/hass_nuki_bt"
           zip hass_nuki_bt.zip -r ./
 
+      - name: "Validate the installable ZIP"
+        run: python3 scripts/validate_release.py custom_components/hass_nuki_bt/hass_nuki_bt.zip
+
       - name: "Upload the ZIP file to the release"
         uses: softprops/action-gh-release@v3.0.1
         with:

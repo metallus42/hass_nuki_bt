@@ -56,6 +56,17 @@ Home Assistant instance running and already configured with the included
 [`configuration.yaml`](./configuration.yaml)
 file.
 
+## Validate release packages
+
+Keep `custom_components/hass_nuki_bt/translations/en.json` as a regular JSON
+file matching `strings.json`, rather than a symlink. Some ZIP creation paths
+store only the symlink target text, which prevents Home Assistant from loading
+the entire integration after installation.
+
+After building an integration ZIP, run
+`python3 scripts/validate_release.py /path/to/hass_nuki_bt.zip` before uploading
+it. CI and the release workflow run the same check on the packaged files.
+
 ## License
 
 By contributing, you agree that your contributions will be licensed under its MIT License.
