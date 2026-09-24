@@ -116,14 +116,7 @@
         "name": "Status des letzten Nuki-Befehls"
       },
       "nuki_state": {
-        "name": "Nuki-Betriebsmodus",
-        "state": {
-          "UNINITIALIZED": "Nicht initialisiert",
-          "PAIRING_MODE": "Kopplungsmodus",
-          "DOOR_MODE": "Normalbetrieb",
-          "CONTINUOUS_MODE": "Dauermodus",
-          "MAINTENANCE_MODE": "Wartungsmodus"
-        }
+        "name": "Nuki-Betriebsmodus"
       },
       "last_action_user": {
         "name": "Benutzer der letzten Aktion"

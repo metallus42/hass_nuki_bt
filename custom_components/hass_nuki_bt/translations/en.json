@@ -116,14 +116,7 @@
         "name": "Last Nuki command status"
       },
       "nuki_state": {
-        "name": "Nuki state",
-        "state": {
-          "UNINITIALIZED": "Not initialized",
-          "PAIRING_MODE": "Pairing mode",
-          "DOOR_MODE": "Door mode",
-          "CONTINUOUS_MODE": "Continuous Mode",
-          "MAINTENANCE_MODE": "Maintenance mode"
-        }
+        "name": "Nuki state"
       },
       "last_action_user": {
         "name": "Last action user name"

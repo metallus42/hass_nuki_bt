@@ -116,14 +116,7 @@
         "name": "Stato ultimo comando Nuki"
       },
       "nuki_state": {
-        "name": "Modalità Nuki",
-        "state": {
-          "UNINITIALIZED": "Non inizializzato",
-          "PAIRING_MODE": "Modalità associazione",
-          "DOOR_MODE": "Modalità porta",
-          "CONTINUOUS_MODE": "Modalità continua",
-          "MAINTENANCE_MODE": "Modalità manutenzione"
-        }
+        "name": "Modalità Nuki"
       },
       "last_action_user": {
         "name": "Utente dell’ultima azione"
