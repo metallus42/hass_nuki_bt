@@ -46,6 +46,27 @@ hass_nuki_bt can connect to the Nuki lock in 2 ways:
   * "App" will allow you to run hass_nuki_bt alongside a Nuki Bridge, but can lead to either device missing updates.
 
 
+## Recover Bluetooth pairing on an Opener
+
+If an Opener disappears from the Nuki app while Bluetooth pairing is disabled,
+an existing Home Assistant pairing can re-enable it. The integration must have
+the Opener's security PIN. Use **Enable Bluetooth pairing** on the device page,
+or call:
+
+```yaml
+action: hass_nuki_bt.set_bluetooth_pairing
+target:
+  entity_id: lock.your_opener
+data:
+  enabled: true
+```
+
+Then start pairing using the physical Opener button and add it in the Nuki app.
+This only permits pairing; it does not remotely start pairing or open the door.
+Set `enabled: false` to disallow button pairing again after reconnecting the app.
+All other basic settings are preserved, and the result is read back and verified.
+This action is supported for Openers only.
+
 ## Contributions are welcome!
 
 If you want to contribute to this please read the [Contribution guidelines](CONTRIBUTING.md)

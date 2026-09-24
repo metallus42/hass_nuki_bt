@@ -5,6 +5,7 @@ import logging
 from homeassistant.components.button import ButtonEntity, ButtonEntityDescription, ButtonDeviceClass
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
+from homeassistant.const import EntityCategory
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from pyNukiBT import NukiConst, NukiDevice, NukiLockConst, NukiOpenerConst
 
@@ -35,6 +36,13 @@ BUTTON_TYPES_COMMON: list[NukiButtonEntityDescription] = [
     ),
 ]
 BUTTON_TYPES_OPENER: list[NukiButtonEntityDescription] = BUTTON_TYPES_COMMON + [
+    NukiButtonEntityDescription(
+        key="enable_bluetooth_pairing",
+        name="Enable Bluetooth pairing",
+        icon="mdi:bluetooth-connect",
+        entity_category=EntityCategory.CONFIG,
+        action_function=lambda slf: slf.async_handle_set_bluetooth_pairing(True),
+    ),
     NukiButtonEntityDescription(
         name="Activate Continuous Mode",
         key="activate_cm",

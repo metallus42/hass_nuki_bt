@@ -7,3 +7,19 @@ update_nuki_time:
   fields:
     time:
       required: false
+set_bluetooth_pairing:
+  name: Set Bluetooth pairing permission
+  description: >-
+    Allow or disallow pairing a Nuki Opener using its physical button.
+    Requires the security PIN stored in the integration. After enabling,
+    start pairing on the Opener itself and add it in the Nuki app.
+  target:
+    entity:
+      domain: lock
+      integration: hass_nuki_bt
+  fields:
+    enabled:
+      name: Allow Bluetooth pairing
+      required: true
+      selector:
+        boolean:

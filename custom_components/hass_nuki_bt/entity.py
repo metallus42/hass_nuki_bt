@@ -7,13 +7,14 @@ from homeassistant.components.bluetooth.passive_update_coordinator import (
     PassiveBluetoothCoordinatorEntity,
 )
 from homeassistant.core import callback
-from homeassistant.exceptions import ServiceValidationError
+from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.entity import DeviceInfo
 from pyNukiBT import NukiDevice
 
 from .const import MANUFACTURER
 from .coordinator import NukiDataUpdateCoordinator
+from .pairing import async_set_opener_pairing_enabled
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -74,3 +75,17 @@ class NukiEntity(PassiveBluetoothCoordinatorEntity[NukiDataUpdateCoordinator]):
             raise ServiceValidationError("Security PIN is required to update nuki time.")
         result = await self.device.update_nuki_time(self.coordinator._security_pin, time)
         return result.status
+
+    async def async_handle_set_bluetooth_pairing(self, enabled: bool):
+        """Allow or disallow starting Opener pairing with its physical button."""
+        try:
+            result = await async_set_opener_pairing_enabled(
+                self.device, self.coordinator._security_pin, enabled
+            )
+        except ValueError as err:
+            raise ServiceValidationError(str(err)) from err
+        except RuntimeError as err:
+            raise HomeAssistantError(str(err)) from err
+        finally:
+            self.coordinator.async_update_listeners()
+        return {"pairing_enabled": result}
