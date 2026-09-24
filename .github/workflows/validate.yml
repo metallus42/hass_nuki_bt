@@ -12,6 +12,20 @@ on:
       - "main"
 
 jobs:
+  release-package:
+    name: "Release package validation"
+    runs-on: "ubuntu-latest"
+    steps:
+      - name: "Checkout the repository"
+        uses: "actions/checkout@v7.0.0"
+
+      - name: "Build the installable ZIP"
+        working-directory: custom_components/hass_nuki_bt
+        run: zip -r "$RUNNER_TEMP/hass_nuki_bt.zip" .
+
+      - name: "Validate the installable ZIP"
+        run: python3 scripts/validate_release.py "$RUNNER_TEMP/hass_nuki_bt.zip"
+
   hassfest: # https://developers.home-assistant.io/blog/2020/04/16/hassfest
     name: "Hassfest Validation"
     runs-on: "ubuntu-latest"
