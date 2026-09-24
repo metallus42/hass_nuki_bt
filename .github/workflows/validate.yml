@@ -24,7 +24,7 @@ jobs:
           docker run --rm --entrypoint /bin/sh \
             -v "$GITHUB_WORKSPACE:/work:ro" -w /work \
             ghcr.io/home-assistant/home-assistant:2026.9.3 \
-            -c 'python -m pip install --disable-pip-version-check pyNukiBT==0.0.20 async-timeout==5.0.1 && python scripts/build_release.py /tmp/hass_nuki_bt.zip && python scripts/test_release.py /tmp/hass_nuki_bt.zip'
+            -c 'python scripts/build_release.py /tmp/hass_nuki_bt.zip && python scripts/install_requirements.py /tmp/hass_nuki_bt.zip && python scripts/test_release.py /tmp/hass_nuki_bt.zip'
 
   release-package:
     name: "Release package validation"

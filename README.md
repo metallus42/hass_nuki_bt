@@ -82,7 +82,7 @@ The security PIN can be changed through the integration's **Reconfigure** menu w
 
 ## Development and release checks
 
-Use the complete HA 2026.9.3 runtime and the pinned dependencies in `requirements.txt`. Build with `python scripts/build_release.py /tmp/hass_nuki_bt.zip`, validate with `python scripts/validate_release.py /tmp/hass_nuki_bt.zip --expected-version 0.0.27`, and run `python scripts/test_release.py /tmp/hass_nuki_bt.zip` in that runtime. The latter imports the extracted package and runs the regression suite against its contents rather than the source checkout.
+Use the complete HA 2026.9.3 runtime and resolve integration dependencies against Home Assistant's `package_constraints.txt`. Build with `python scripts/build_release.py /tmp/hass_nuki_bt.zip`, validate with `python scripts/validate_release.py /tmp/hass_nuki_bt.zip --expected-version 0.0.28`, and run `python scripts/test_release.py /tmp/hass_nuki_bt.zip` in that runtime. The latter imports the extracted package and runs the regression suite against its contents rather than the source checkout. CI and release builds also check that Home Assistant can resolve the packaged manifest's requirements under its own constraints.
 
 ## Contributions are welcome!
 
