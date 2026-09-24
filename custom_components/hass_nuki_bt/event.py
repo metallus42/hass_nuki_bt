@@ -27,6 +27,7 @@ class NukiOpenerDoorbellEvent(NukiEntity, EventEntity):
     """Represent a physical press of the Opener's doorbell."""
 
     _attr_event_types = [DoorbellEventType.RING]
+    _attr_translation_key = "doorbell"
     entity_description = EventEntityDescription(
         key="doorbell",
         name="Doorbell",

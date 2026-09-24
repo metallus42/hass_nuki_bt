@@ -3,6 +3,7 @@
 import asyncio
 import logging
 
+from bleak import BleakError
 from pyNukiBT import NukiDevice
 from pyNukiBT.const import NukiErrorException
 
@@ -14,10 +15,9 @@ async def async_request_log_entries(
 ):
     """Retry a read once, obtaining a fresh challenge for each attempt.
 
-    pyNukiBT 0.0.20 retries the already encoded request after a response
-    timeout. Its payload nonce may already have been consumed by the device.
-    Keep the whole challenge/read transaction under its operation lock and
-    disable response replay for each individual command instead.
+    SafeNukiDevice sends each encoded command only once. Keep the complete
+    challenge/read transaction under its operation lock and obtain a new
+    challenge if a response or connection is lost.
     """
     const = device._const
     command = const.NukiCommand
@@ -50,7 +50,7 @@ async def async_request_log_entries(
         except NukiErrorException as err:
             if attempt or err.error_code != const.ErrorCode.K_ERROR_BAD_NONCE:
                 raise
-        except asyncio.TimeoutError:
+        except (BleakError, asyncio.TimeoutError):
             if attempt:
                 raise
         _LOGGER.debug("Retrying Nuki log read with a fresh challenge")

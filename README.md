@@ -14,17 +14,20 @@ This integration communicates directly with Nuki over Bluetooth. No need for a b
 
 
 ## Background
+- Maintained fork of [ronengr/hass_nuki_bt](https://github.com/ronengr/hass_nuki_bt).
 - This project is based on [RaspiNukiBridge](https://github.com/regevbr/RaspiNukiBridge) by [dauden1184](https://github.com/dauden1184/) and [regevbr](https://github.com/regevbr)
 - This project is heavily inspired by [kvj](https://github.com/kvj)'s [hass_nuki_ng](https://github.com/kvj/hass_nuki_ng) and [technyon](https://github.com/technyon)'s [nuki_hub](https://github.com/technyon/nuki_hub)
 
 ## Setup
+
+Requires **Home Assistant 2026.9.3 or newer**. The release package is tested against 2026.9.3 with pyNukiBT 0.0.20; older HA versions are not supported by this fork.
 
 {% if not installed %}
 
 ### Installation:
 * Go to HACS -> Integrations
 * Click the three dots on the top right and select `Custom Repositories`
-* Enter `https://github.com/ronengr/hass_nuki_bt` as repository, select the category `Integration` and click Add
+* Enter `https://github.com/metallus42/hass_nuki_bt` as repository, select the category `Integration` and click Add
 * A new custom integration shows up for installation (Nuki BT) - install it
 * Restart Home Assistant
 
@@ -67,6 +70,20 @@ Set `enabled: false` to disallow button pairing again after reconnecting the app
 All other basic settings are preserved, and the result is read back and verified.
 This action is supported for Openers only.
 
+## Opener modes and reliability
+
+The **Continuous mode** switch reports the confirmed device mode. Turning it off requests Door Mode; turning it on requests Continuous Mode. The existing activation/deactivation buttons remain available for existing automations.
+
+Mode changes use at most three attempts. After an uncertain response, the integration reads the actual mode before retrying and obtains a fresh challenge for each new command. Explicit cancellation stops the request. One-shot door opening actions are never automatically replayed after an uncertain response.
+
+Successful actions do not depend on optional activity logs. Doorbell events are processed from their matching fresh state response before optional log work. Connections and pending work are cleaned up when the integration unloads or reloads.
+
+The security PIN can be changed through the integration's **Reconfigure** menu without pairing again. Authentication fields and PINs are excluded from the integration's command logging.
+
+## Development and release checks
+
+Use the complete HA 2026.9.3 runtime and the pinned dependencies in `requirements.txt`. Build with `python scripts/build_release.py /tmp/hass_nuki_bt.zip`, validate with `python scripts/validate_release.py /tmp/hass_nuki_bt.zip --expected-version 0.0.27`, and run `python scripts/test_release.py /tmp/hass_nuki_bt.zip` in that runtime. The latter imports the extracted package and runs the regression suite against its contents rather than the source checkout.
+
 ## Contributions are welcome!
 
 If you want to contribute to this please read the [Contribution guidelines](CONTRIBUTING.md)
@@ -75,15 +92,15 @@ Latest Nuki Bluetooth API spec: https://developer.nuki.io/t/bluetooth-api/27
 
 ***
 
-[hass_nuki_bt]: https://github.com/ronengr/hass_nuki_bt
-[commits-shield]: https://img.shields.io/github/commit-activity/y/ronengr/hass_nuki_bt.svg?style=for-the-badge
-[commits]: https://github.com/ronengr/hass_nuki_bt/commits/main
+[hass_nuki_bt]: https://github.com/metallus42/hass_nuki_bt
+[commits-shield]: https://img.shields.io/github/commit-activity/y/metallus42/hass_nuki_bt.svg?style=for-the-badge
+[commits]: https://github.com/metallus42/hass_nuki_bt/commits/main
 [hacs]: https://github.com/hacs/integration
 [hacsbadge]: https://img.shields.io/badge/HACS-Custom-orange.svg?style=for-the-badge
 [exampleimg]: example.png
 [forum-shield]: https://img.shields.io/badge/community-forum-brightgreen.svg?style=for-the-badge
 [forum]: https://community.home-assistant.io/
-[license-shield]: https://img.shields.io/github/license/ronengr/hass_nuki_bt.svg?style=for-the-badge
-[maintenance-shield]: https://img.shields.io/badge/maintainer-%20%40ronengr-blue.svg?style=for-the-badge
-[releases-shield]: https://img.shields.io/github/release/ronengr/hass_nuki_bt.svg?style=for-the-badge
-[releases]: https://github.com/ronengr/hass_nuki_bt/releases
+[license-shield]: https://img.shields.io/github/license/metallus42/hass_nuki_bt.svg?style=for-the-badge
+[maintenance-shield]: https://img.shields.io/badge/maintainer-%20%40metallus42-blue.svg?style=for-the-badge
+[releases-shield]: https://img.shields.io/github/release/metallus42/hass_nuki_bt.svg?style=for-the-badge
+[releases]: https://github.com/metallus42/hass_nuki_bt/releases

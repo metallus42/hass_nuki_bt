@@ -2,6 +2,8 @@
 
 from pyNukiBT import NukiConst, NukiDevice, NukiOpenerConst
 
+from .protocol import async_read_config_locked
+
 
 async def async_set_opener_pairing_enabled(
     device: NukiDevice, security_pin: int | None, enabled: bool
@@ -29,18 +31,11 @@ async def async_set_opener_pairing_enabled(
             command.REQUEST_DATA,
             {"command": command.CHALLENGE},
             expected_response=command.CHALLENGE,
+            response_retry=1,
         )
 
     async def read_config():
-        nonce = await challenge()
-        config = await device._send_encrypted_command(
-            command.REQUEST_CONFIG,
-            {"nonce": nonce["nonce"]},
-            expected_response=command.CONFIG,
-        )
-        device.config = config
-        device._poll_needed_config = False
-        return config
+        return await async_read_config_locked(device)
 
     async with device._operation_lock:
         before = await read_config()
@@ -68,7 +63,13 @@ async def async_set_opener_pairing_enabled(
         if result["status"] != const.StatusCode.COMPLETED:
             raise RuntimeError("The Opener did not confirm the configuration change.")
 
-        after = await read_config()
+        try:
+            after = await read_config()
+        except Exception as error:
+            # Never repeat a confirmed write because its optional readback failed.
+            raise RuntimeError(
+                "The Opener confirmed the pairing setting, but its verification failed."
+            ) from error
         if after["pairing_enabled"] != int(enabled):
             raise RuntimeError("The Opener did not retain the Bluetooth pairing permission.")
         if any(after[name] != before[name] for name in fields if name != "pairing_enabled"):

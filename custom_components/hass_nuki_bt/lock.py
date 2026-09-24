@@ -65,13 +65,17 @@ class NukiLock(NukiEntity, LockEntity):
 
     def _async_update_attrs(self) -> None:
         """Update the entity attributes."""
-        status = self.device.keyturner_state.lock_state
-        self._attr_is_jammed = status is NukiLockConst.LockState.MOTOR_BLOCKED
-        self._attr_is_open = status is NukiOpenerConst.LockState.OPEN
-        self._attr_is_opening = status is  NukiOpenerConst.LockState.OPENING
-        self._attr_is_locked = status is NukiLockConst.LockState.LOCKED
-        self._attr_is_locking = status is NukiLockConst.LockState.LOCKING
-        self._attr_is_unlocking = status is NukiLockConst.LockState.UNLOCKING
+        status = self.device.keyturner_state.get("lock_state")
+        states = NukiLockConst.LockState
+        self._attr_is_jammed = status == states.MOTOR_BLOCKED
+        self._attr_is_open = status == states.UNLATCHED
+        self._attr_is_opening = status == states.UNLATCHING
+        self._attr_is_locked = (
+            True if status == states.LOCKED else
+            False if status in (states.UNLOCKED, states.UNLOCKED_LOCK_N_GO, states.UNLATCHED, states.UNLATCHING) else None
+        )
+        self._attr_is_locking = status == states.LOCKING
+        self._attr_is_unlocking = status == states.UNLOCKING
 
     async def async_lock(self, **kwargs: Any) -> None:
         """Lock the lock."""
@@ -102,12 +106,15 @@ class NukiOpener(NukiEntity, LockEntity):
 
     def _async_update_attrs(self) -> None:
         """Update the entity attributes."""
-        status = self.device.keyturner_state.lock_state
-        self._attr_is_jammed = status is NukiOpenerConst.LockState.UNCALIBRATED
-        self._attr_is_open = status is NukiOpenerConst.LockState.OPEN
-        self._attr_is_opening = status is NukiOpenerConst.LockState.OPENING
-        self._attr_is_locked = status is NukiOpenerConst.LockState.LOCKED
-        self._attr_is_unknown = status is NukiOpenerConst.LockState.UNDEFINED
+        status = self.device.keyturner_state.get("lock_state")
+        states = NukiOpenerConst.LockState
+        self._attr_is_jammed = False
+        self._attr_is_open = status == states.OPEN
+        self._attr_is_opening = status == states.OPENING
+        self._attr_is_locked = (
+            True if status == states.LOCKED else
+            False if status in (states.RTO_ACTIVE, states.OPEN, states.OPENING) else None
+        )
 
     async def async_lock(self, **kwargs: Any) -> None:
         """Lock the lock."""

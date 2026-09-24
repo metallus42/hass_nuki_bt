@@ -24,7 +24,7 @@ jobs:
           docker run --rm --entrypoint /bin/sh \
             -v "$GITHUB_WORKSPACE:/work:ro" -w /work \
             ghcr.io/home-assistant/home-assistant:2026.9.3 \
-            -c 'python -m pip install --disable-pip-version-check pyNukiBT==0.0.20 async-timeout==5.0.1 && python -m unittest discover -s tests -v'
+            -c 'python -m pip install --disable-pip-version-check pyNukiBT==0.0.20 async-timeout==5.0.1 && python scripts/build_release.py /tmp/hass_nuki_bt.zip && python scripts/test_release.py /tmp/hass_nuki_bt.zip'
 
   release-package:
     name: "Release package validation"
@@ -34,8 +34,7 @@ jobs:
         uses: "actions/checkout@v7.0.0"
 
       - name: "Build the installable ZIP"
-        working-directory: custom_components/hass_nuki_bt
-        run: zip -r "$RUNNER_TEMP/hass_nuki_bt.zip" .
+        run: python3 scripts/build_release.py "$RUNNER_TEMP/hass_nuki_bt.zip"
 
       - name: "Validate the installable ZIP"
         run: python3 scripts/validate_release.py "$RUNNER_TEMP/hass_nuki_bt.zip"

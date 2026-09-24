@@ -1,5 +1,4 @@
-colorlog
-homeassistant
-pip
-ruff
-pyNukiBT @ git+https://github.com/ronengr/pyNukiBT.git@main
+homeassistant==2026.9.3
+pyNukiBT==0.0.20
+async-timeout==5.0.1
+ruff==0.15.7

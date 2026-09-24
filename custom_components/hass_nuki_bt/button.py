@@ -46,13 +46,13 @@ BUTTON_TYPES_OPENER: list[NukiButtonEntityDescription] = BUTTON_TYPES_COMMON + [
     NukiButtonEntityDescription(
         name="Activate Continuous Mode",
         key="activate_cm",
-        icon="mdi:home-lock",
+        icon="mdi:home-lock-open",
         action=NukiOpenerConst.LockAction.ACTIVATE_CM,
     ),
     NukiButtonEntityDescription(
         name="Deactivate Continuous Mode",
         key="deactivate_cm",
-        icon="mdi:home-lock-open",
+        icon="mdi:home-lock",
         action=NukiOpenerConst.LockAction.DEACTIVATE_CM,
     ),
 ]
@@ -99,7 +99,7 @@ class NukiButton(ButtonEntity, NukiEntity):
     ) -> None:
         """Initialize the entity."""
         super().__init__(coordinator)
-        self._attr_name = btn.name
+        self._attr_translation_key = btn.key
         self._attr_unique_id = f"{coordinator.base_unique_id}-{btn.key}"
         self._action = btn.action
         self._attr_icon = btn.icon
