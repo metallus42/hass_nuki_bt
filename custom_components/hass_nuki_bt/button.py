@@ -2,12 +2,15 @@
 from dataclasses import dataclass
 from collections.abc import Callable
 import logging
+from bleak import BleakError
 from homeassistant.components.button import ButtonEntity, ButtonEntityDescription, ButtonDeviceClass
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.const import EntityCategory
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
+from homeassistant.exceptions import HomeAssistantError
 from pyNukiBT import NukiConst, NukiDevice, NukiLockConst, NukiOpenerConst
+from pyNukiBT.const import NukiErrorException
 
 from .entity import NukiEntity
 
@@ -107,4 +110,9 @@ class NukiButton(ButtonEntity, NukiEntity):
 
     async def async_press(self) -> None:
         """Handle the button press."""
-        await self.entity_description.action_function(self)
+        try:
+            await self.entity_description.action_function(self)
+        except (BleakError, TimeoutError, NukiErrorException) as err:
+            raise HomeAssistantError(
+                f"Nuki button failed: {str(err) or type(err).__name__}"
+            ) from err

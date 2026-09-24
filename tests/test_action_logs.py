@@ -6,11 +6,13 @@ from types import SimpleNamespace
 import unittest
 from unittest.mock import AsyncMock, Mock, patch
 
+from bleak import BleakError
 from construct import Container
 from homeassistant.exceptions import HomeAssistantError
 from pyNukiBT import NukiConst, NukiOpenerConst
 from pyNukiBT.const import NukiErrorException
 
+from custom_components.hass_nuki_bt.button import NukiButton
 from custom_components.hass_nuki_bt.entity import NukiEntity
 from custom_components.hass_nuki_bt.logs import async_request_log_entries
 
@@ -148,13 +150,40 @@ class ActionTests(unittest.IsolatedAsyncioTestCase):
         entity.coordinator.async_refresh_after_action.assert_not_called()
 
     async def test_command_error_propagates(self):
-        """Only optional reads are best effort; command failures still fail."""
+        """A protocol rejection remains a service error HA can classify."""
         entity = self.make_entity()
         with (
             patch("custom_components.hass_nuki_bt.entity.async_execute_lock_action", new_callable=AsyncMock, side_effect=nuki_error(NukiOpenerConst.ErrorCode.K_ERROR_BAD_NONCE)),
-            self.assertRaises(NukiErrorException),
+            self.assertRaises(HomeAssistantError) as raised,
         ):
             await NukiEntity.async_lock_action(entity, NukiOpenerConst.LockAction.ACTIVATE_CM)
+        self.assertIsInstance(raised.exception.__cause__, NukiErrorException)
+        entity.coordinator.async_refresh_after_action.assert_not_called()
+
+    async def test_button_transport_errors_can_be_continued_by_ha(self):
+        """A failed state query must not abort HA's delayed retry sequence."""
+        for error in (TimeoutError(), BleakError("offline"), nuki_error(NukiOpenerConst.ErrorCode.K_ERROR_BAD_NONCE)):
+            with self.subTest(error=type(error).__name__):
+                entity = SimpleNamespace(entity_description=SimpleNamespace(action_function=AsyncMock(side_effect=error)))
+                with self.assertRaises(HomeAssistantError) as raised:
+                    await NukiButton.async_press(entity)
+                self.assertIs(raised.exception.__cause__, error)
+
+    async def test_button_cancellation_is_not_a_retryable_error(self):
+        """A newer automation request must still stop an older query."""
+        entity = SimpleNamespace(entity_description=SimpleNamespace(action_function=AsyncMock(side_effect=asyncio.CancelledError())))
+        with self.assertRaises(asyncio.CancelledError):
+            await NukiButton.async_press(entity)
+
+    async def test_timed_out_mode_command_is_ha_service_error(self):
+        """A mode failure can be handled by an automation's retry steps."""
+        entity = self.make_entity()
+        with (
+            patch("custom_components.hass_nuki_bt.entity.async_execute_lock_action", new_callable=AsyncMock, side_effect=TimeoutError()),
+            self.assertRaises(HomeAssistantError) as raised,
+        ):
+            await NukiEntity.async_lock_action(entity, NukiOpenerConst.LockAction.DEACTIVATE_CM)
+        self.assertIsInstance(raised.exception.__cause__, TimeoutError)
         entity.coordinator.async_refresh_after_action.assert_not_called()
 
 

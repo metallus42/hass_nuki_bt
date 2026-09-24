@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import logging
 
+from bleak import BleakError
 from homeassistant.components.bluetooth.passive_update_coordinator import (
     PassiveBluetoothCoordinatorEntity,
 )
@@ -11,6 +12,7 @@ from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.entity import DeviceInfo
 from pyNukiBT import NukiDevice
+from pyNukiBT.const import NukiErrorException
 
 from .const import MANUFACTURER
 from .coordinator import NukiDataUpdateCoordinator
@@ -62,8 +64,10 @@ class NukiEntity(PassiveBluetoothCoordinatorEntity[NukiDataUpdateCoordinator]):
         try:
             async with self.coordinator.async_action():
                 await async_execute_lock_action(self.device, action, name_suffix=user_name)
-        except RuntimeError as err:
-            raise HomeAssistantError(str(err)) from err
+        except (BleakError, TimeoutError, NukiErrorException, RuntimeError) as err:
+            raise HomeAssistantError(
+                f"Nuki action failed: {str(err) or type(err).__name__}"
+            ) from err
         self.coordinator.async_update_listeners()
         self.coordinator.async_refresh_after_action()
 

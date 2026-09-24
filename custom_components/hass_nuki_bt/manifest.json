@@ -23,5 +23,5 @@
     "async-timeout==4.0.3",
     "pyNukiBT==0.0.20"
   ],
-  "version": "0.0.28"
+  "version": "0.0.29"
 }
